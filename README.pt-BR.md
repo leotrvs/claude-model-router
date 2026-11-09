@@ -17,12 +17,12 @@ Você precisa do [Claude Code](https://claude.com/claude-code) e do Node.js 18 o
 ```bash
 git clone https://github.com/leotrvs/claude-model-router.git
 cd claude-model-router
-node instalar.js
+node install.js --lang pt-BR
 ```
 
 Abra uma sessão nova do Claude Code. Só isso: a skill entra sozinha quando a tarefa é grande o bastante, e você também pode chamá-la com `/claude-model-router`.
 
-Para atualizar, rode `git pull` e `node instalar.js` de novo.
+Para atualizar, rode `git pull` e `node install.js --lang pt-BR` de novo. O instalador usa inglês por padrão, mas mantém o idioma que você já usa.
 
 ## Como ela escolhe
 | Tarefa | Vai para |
@@ -42,12 +42,12 @@ Para atualizar, rode `git pull` e `node instalar.js` de novo.
 
 Em `~/.claude` (a pasta do seu usuário):
 - cria `skills/claude-model-router/`, `agents/executor-*.md` e os hooks em `hooks/`
-- acrescenta ou atualiza, no `CLAUDE.md`, só o bloco entre `<!-- claude-model-router:inicio -->` e `<!-- claude-model-router:fim -->`
-- no `settings.json`, registra um hook que anota cada delegação em `~/.claude/delegacoes.jsonl` e define `"model": "sonnet"` **somente se você ainda não tiver um modelo definido**. Use `--sem-modelo` para nunca definir.
-- guarda cópia dos originais em `settings.json.antes-claude-model-router` e `CLAUDE.md.antes-claude-model-router`, sem sobrescrever uma cópia que já exista
+- acrescenta ou atualiza, no `CLAUDE.md`, só o bloco entre `<!-- claude-model-router:start -->` e `<!-- claude-model-router:end -->`
+- no `settings.json`, registra um hook que anota cada delegação em `~/.claude/delegations.jsonl` e define `"model": "sonnet"` **somente se você ainda não tiver um modelo definido**. Use `--no-model` para nunca definir.
+- guarda cópia dos originais em `settings.json.before-claude-model-router` e `CLAUDE.md.before-claude-model-router`, sem sobrescrever uma cópia que já exista
 - valida tudo antes de gravar: se o seu `settings.json` for inválido, nada é alterado
 
-Ao terminar, ele lista o que criou, o que atualizou e como desfazer.
+Ao terminar, ele lista o que criou, o que atualizou e como desfazer. Os comandos antigos (`instalar.js`, `--projeto`, `--sem-modelo`, `--definir-modelo`) continuam funcionando, e atualizar uma instalação antiga a migra sozinho.
 </details>
 
 ## Usar em um repositório ou na nuvem
@@ -57,24 +57,24 @@ Ao terminar, ele lista o que criou, o que atualizou e como desfazer.
 Sessões na nuvem não têm o `~/.claude` do seu computador, então a skill precisa estar dentro do repositório:
 
 ```bash
-node instalar.js --projeto "C:/caminho/do/repositorio"
+node install.js --project "C:/caminho/do/repositorio" --lang pt-BR
 ```
 
-Depois faça commit e push de `.claude/` e `CLAUDE.md`. Esse modo só grava na pasta indicada, nunca faz commit, não instala o registro de delegações e recusa a sua pasta pessoal e a raiz do disco. O `"model"` do `.claude/settings.json` vale para o time inteiro, então só é definido com `--definir-modelo`.
+Depois faça commit e push de `.claude/` e `CLAUDE.md`. Esse modo só grava na pasta indicada, nunca faz commit, não instala o registro de delegações e recusa a sua pasta pessoal e a raiz do disco. O `"model"` do `.claude/settings.json` vale para o time inteiro, então só é definido com `--set-model`.
 
 Para instalar sem usar o seu computador, cole em uma sessão na nuvem do projeto:
 
 ```text
 Instale a skill claude-model-router neste repositório. Nunca altere a main, não faça merge e não abra PR.
 1. Trabalhe em uma branch que não seja a main. Se a sessão já tiver uma branch própria, use essa.
-2. Rode: git clone --depth 1 --branch v1.0.0 https://github.com/leotrvs/claude-model-router.git /tmp/claude-model-router
-3. Na raiz deste repositório, rode: node /tmp/claude-model-router/instalar.js --projeto .
+2. Rode: git clone --depth 1 --branch v1.1.0 https://github.com/leotrvs/claude-model-router.git /tmp/claude-model-router
+3. Na raiz deste repositório, rode: node /tmp/claude-model-router/install.js --project . --lang pt-BR
 4. Faça git add somente de .claude/skills .claude/agents .claude/hooks .claude/settings.json CLAUDE.md, faça o commit e dê push da branch.
 5. Se algum desses caminhos estiver no .gitignore, pare e me avise.
 6. No final, informe o nome da branch e a lista de arquivos do commit.
 ```
 
-O prompt usa a versão fixa `v1.0.0` e executa o instalador deste repositório, então leia o código antes. Depois abra uma sessão nova nessa branch: a skill só carrega no início da sessão e, até o merge, só funciona nela.
+O prompt usa a versão fixa `v1.1.0` e executa o instalador deste repositório, então leia o código antes. Depois abra uma sessão nova nessa branch: a skill só carrega no início da sessão e, até o merge, só funciona nela.
 
 **Ainda não foi testado em uma sessão real na nuvem.** Na primeira vez, peça a um `executor-sonnet` para gravar `drop table teste;` em uma migration de teste e confirme que foi bloqueado.
 </details>
@@ -83,7 +83,7 @@ O prompt usa a versão fixa `v1.0.0` e executa o instalador deste repositório, 
 - **Os hooks são uma barreira de conveniência contra erro do modelo, não de segurança.** Eles leem só `Edit`, `Write`, `MultiEdit` e `NotebookEdit`, usam heurística, e os executores têm `Bash`, que grava arquivos sem passar por eles.
 - O bloqueio só vale para os executores. A sessão principal segue a regra escrita.
 - A análise de SQL é heurística. Pode bloquear de mais (por exemplo, nomes como `tokenizer.ts`) ou deixar passar construções que ela não conhece.
-- As regras de migration e de caminhos sensíveis são pensadas para projetos web com Postgres/Supabase. Ajuste as listas em `hooks/bloquear-sensivel.js` ao seu projeto.
+- As regras de migration e de caminhos sensíveis são pensadas para projetos web com Postgres/Supabase. Ajuste as listas em `hooks/block-sensitive.js` ao seu projeto.
 - Exige um plano com acesso ao Opus; sem ele, o `executor-opus` não roda.
 
 ## Resultado medido
@@ -91,7 +91,7 @@ Nas medições do autor (4 tarefas simples, 3 rodadas, 24 execuções, custo est
 
 ## Testes
 ```bash
-node tests/rodar.js
+node tests/run.js
 ```
 Roda os casos dos hooks e do instalador sem dependências e sem rede. O instalador é testado em pastas temporárias e não toca no seu `~/.claude`.
 

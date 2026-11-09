@@ -26,7 +26,7 @@ Ler migrations é livre para qualquer nível. O que define o modelo é o que a n
 | **Opus** | Política ou RLS em tabela existente, `drop`, `truncate`, `delete`, `update` em massa, mudar tipo ou `not null`, `grant`/`revoke`, `security definer`, política `using (true)`, schema `auth`, qualquer dado financeiro |
 
 - Haiku nunca grava migration.
-- Um hook tenta barrar os casos da linha Opus nos executores `haiku` e `sonnet`, além de gravação em caminhos sensíveis (veja a lista em `hooks/bloquear-sensivel.js`). Se bloquear, suba para `executor-opus`.
+- Um hook tenta barrar os casos da linha Opus nos executores `haiku` e `sonnet`, além de gravação em caminhos sensíveis (veja a lista em `hooks/block-sensitive.js`). Se bloquear, suba para `executor-opus`.
 - O hook é uma barreira de conveniência contra erro do modelo, não de segurança: ele lê só `Edit` e `Write`, usa heurística e o executor tem `Bash`. A decisão de nível continua sendo sua, antes de delegar.
 - Se a tabela nova guardar dado pessoal ou financeiro, trate como Opus mesmo que o hook não pegue.
 - Antes de aplicar qualquer migration, passe-a por um agente de revisão de migrations, se o projeto tiver um (por exemplo, um `migration-checker`). Se não tiver, releia o SQL você mesmo.
@@ -81,7 +81,7 @@ O relatório do agente é uma alegação, não uma prova. Só diga ao usuário q
 - rodar a verificação do briefing
 - em interface, abrir a tela no navegador e comparar com uma tela vizinha; se não der para abrir, diga isso ao usuário
 
-Se a revisão reprovar, corrija você mesmo ou suba um nível, e registre `REPROVADO`.
+Se a revisão reprovar, corrija você mesmo ou suba um nível<!-- local-only:start -->, e registre `REPROVADO`<!-- local-only:end -->.
 
 ## 5. Escalone quando falhar
 
@@ -91,15 +91,17 @@ Se o motivo do bloqueio for briefing ambíguo, corrija o briefing em vez de subi
 
 Se até o `executor-opus` falhar, pare e apresente o que foi tentado.
 
+<!-- local-only:start -->
 ## 6. Registro
 
-Cada execução dos executores é registrada automaticamente por um hook em `~/.claude/delegacoes.jsonl`. Registre à mão só quando sua revisão reprovar um resultado:
+Cada execução dos executores é registrada automaticamente por um hook em `~/.claude/delegations.jsonl`. Registre à mão só quando sua revisão reprovar um resultado:
 
 ```bash
-node ~/.claude/skills/claude-model-router/registrar.js <agente> REPROVADO nao ? "motivo em poucas palavras"
+node ~/.claude/skills/claude-model-router/log.js <agente> REPROVADO nao ? "motivo em poucas palavras"
 ```
 
-Para ver os totais, rode `registrar.js --resumo`. Ao passar de 30 registros, sugira ao usuário revisar a tabela do passo 2 com esses dados.
+Para ver os totais, rode `log.js --resumo`. Ao passar de 30 registros, sugira ao usuário revisar a tabela do passo 2 com esses dados.
+<!-- local-only:end -->
 
 ## Regras
 

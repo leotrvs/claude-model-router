@@ -2,6 +2,8 @@ node_modules/
 *.log
 *.antes-claude-model-router
 delegacoes.jsonl
+delegations.jsonl
+*.before-claude-model-router
 .env
 .env.*
 .DS_Store

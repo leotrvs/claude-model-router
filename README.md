@@ -17,14 +17,14 @@ You need [Claude Code](https://claude.com/claude-code) and Node.js 18+.
 ```bash
 git clone https://github.com/leotrvs/claude-model-router.git
 cd claude-model-router
-node instalar.js
+node install.js
 ```
 
 Open a new Claude Code session. That is all: the skill loads by itself when a task is big enough, and you can also call it with `/claude-model-router`.
 
-> The skill text and the installer messages are in Portuguese. Claude reads them fine in any language; translations are welcome.
+> The skill and the installer speak English by default. For the Portuguese version, run `node install.js --lang pt-BR`. Updating keeps the language you already use.
 
-To update, run `git pull` and `node instalar.js` again.
+To update, run `git pull` and `node install.js` again.
 
 ## How it routes
 | Task | Goes to |
@@ -44,12 +44,12 @@ To update, run `git pull` and `node instalar.js` again.
 
 In `~/.claude` (your user folder):
 - creates `skills/claude-model-router/`, `agents/executor-*.md` and the hooks in `hooks/`
-- adds or updates only the block between `<!-- claude-model-router:inicio -->` and `<!-- claude-model-router:fim -->` in `CLAUDE.md`
-- in `settings.json`, registers a hook that logs each delegation to `~/.claude/delegacoes.jsonl`, and sets `"model": "sonnet"` **only if you have no model set**. Use `--sem-modelo` to never set it.
-- keeps a copy of your originals as `settings.json.antes-claude-model-router` and `CLAUDE.md.antes-claude-model-router`, never overwriting an existing copy
+- adds or updates only the block between `<!-- claude-model-router:start -->` and `<!-- claude-model-router:end -->` in `CLAUDE.md`
+- in `settings.json`, registers a hook that logs each delegation to `~/.claude/delegations.jsonl`, and sets `"model": "sonnet"` **only if you have no model set**. Use `--no-model` to never set it.
+- keeps a copy of your originals as `settings.json.before-claude-model-router` and `CLAUDE.md.before-claude-model-router`, never overwriting an existing copy
 - validates everything before writing: if your `settings.json` is invalid, nothing is changed
 
-At the end it prints what it created, what it updated and how to undo it.
+At the end it prints what it created, what it updated and how to undo it. The old commands (`instalar.js`, `--projeto`, `--sem-modelo`, `--definir-modelo`) still work, and updating an older install migrates it automatically.
 </details>
 
 ## Use it in a repository or in the cloud
@@ -59,24 +59,24 @@ At the end it prints what it created, what it updated and how to undo it.
 Cloud sessions do not have the `~/.claude` of your computer, so the skill has to live inside the repository:
 
 ```bash
-node instalar.js --projeto "/path/to/your/repo"
+node install.js --project "/path/to/your/repo"
 ```
 
-Then commit and push `.claude/` and `CLAUDE.md`. This mode writes only inside that folder, never commits, does not install the delegation log, and refuses your home folder and the disk root. The `"model"` in `.claude/settings.json` applies to your whole team, so it is only set with `--definir-modelo`.
+Then commit and push `.claude/` and `CLAUDE.md`. This mode writes only inside that folder, never commits, does not install the delegation log, and refuses your home folder and the disk root. The `"model"` in `.claude/settings.json` applies to your whole team, so it is only set with `--set-model`.
 
 To install without your computer, paste this into a cloud session of your project:
 
 ```text
 Install the claude-model-router skill in this repository. Never change main, never merge and never open a PR.
 1. Work on a branch other than main. If the session already has its own branch, use that one.
-2. Run: git clone --depth 1 --branch v1.0.0 https://github.com/leotrvs/claude-model-router.git /tmp/claude-model-router
-3. At the root of this repository, run: node /tmp/claude-model-router/instalar.js --projeto .
+2. Run: git clone --depth 1 --branch v1.1.0 https://github.com/leotrvs/claude-model-router.git /tmp/claude-model-router
+3. At the root of this repository, run: node /tmp/claude-model-router/install.js --project .
 4. git add only .claude/skills .claude/agents .claude/hooks .claude/settings.json CLAUDE.md, commit, and push the branch.
 5. If any of those paths is in .gitignore, stop and tell me.
 6. At the end, tell me the branch name and the list of files in the commit.
 ```
 
-It pins version `v1.0.0` and runs this repository's installer, so read the code first. Open a new session on that branch afterwards: skills load at the start of a session, and until you merge, it only works on that branch.
+It pins version `v1.1.0` and runs this repository's installer, so read the code first. Open a new session on that branch afterwards: skills load at the start of a session, and until you merge, it only works on that branch.
 
 **Not yet tested in a real cloud session.** The first time, ask an `executor-sonnet` to write `drop table test;` into a test migration and confirm it is blocked.
 </details>
@@ -85,7 +85,7 @@ It pins version `v1.0.0` and runs this repository's installer, so read the code 
 - **The hooks are a convenience guard against model mistakes, not a security barrier.** They only read `Edit`, `Write`, `MultiEdit` and `NotebookEdit`, they use heuristics, and the executors have `Bash`, which can write files without going through them.
 - The block applies only to the executors. The main session follows the written rule.
 - The SQL analysis is a heuristic. It can block too much (for example names like `tokenizer.ts`) or miss constructs it does not know.
-- The migration and sensitive-path rules are built for web projects on Postgres/Supabase. Adjust the lists in `hooks/bloquear-sensivel.js` to your project.
+- The migration and sensitive-path rules are built for web projects on Postgres/Supabase. Adjust the lists in `hooks/block-sensitive.js` to your project.
 - It needs a plan with Opus access; without it, `executor-opus` cannot run.
 
 ## Measured result
@@ -93,7 +93,7 @@ In the author's measurements (4 simple tasks, 3 rounds, 24 runs, cost estimated 
 
 ## Tests
 ```bash
-node tests/rodar.js
+node tests/run.js
 ```
 Runs the hook and installer cases with no dependencies and no network. The installer is tested in temporary folders and never touches your `~/.claude`.
 

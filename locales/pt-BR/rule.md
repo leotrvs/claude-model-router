@@ -1,4 +1,4 @@
-<!-- claude-model-router:inicio -->
+<!-- claude-model-router:start -->
 # Economia de modelos
 
 Use sempre o modelo mais barato capaz de fazer a tarefa com a mesma qualidade. Antes de tarefas com mais de 5 arquivos ou mais de 10 ações previstas, siga a skill `claude-model-router`:
@@ -11,4 +11,4 @@ Use sempre o modelo mais barato capaz de fazer a tarefa com a mesma qualidade. A
 Fora de segurança e pagamento, faça direto, sem agente, perguntas rápidas e edições pequenas. Se falhar, suba um nível. Revise o diff contra os padrões do projeto antes de dizer que terminou.
 
 Se o assunto mudar para uma tarefa sem relação com a conversa atual, sugira `/clear` ou uma sessão nova.
-<!-- claude-model-router:fim -->
+<!-- claude-model-router:end -->
