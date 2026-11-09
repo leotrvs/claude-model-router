@@ -207,6 +207,28 @@ for (const { lang, dir, T } of RUNS) {
   expect(`[${lang}] sonnet passes UserList.tsx`, run('project-gate.js', [], withAgent('executor-sonnet', 'src/components/UserList.tsx')), 0);
   expect(`[${lang}] haiku blocked on .tsx`, run('project-gate.js', [], withAgent('executor-haiku', 'src/components/UserList.tsx')), 2, T.ui);
   expect(`[${lang}] blocks input that is not JSON`, run('project-gate.js', [], 'x'), 2, T.json);
+  // Plugin agent names: same decisions and the same messages as the names without prefix.
+  const same = (name, p, extra = {}) => {
+    const a = run('project-gate.js', [], { ...withAgent(name, p), tool_input: { file_path: p, content: '', ...extra } });
+    const b = run('project-gate.js', [], { ...withAgent(name.replace(/^model-router:/, ''), p), tool_input: { file_path: p, content: '', ...extra } });
+    return { ...a, same: a.status === b.status && a.err === b.err };
+  };
+  const PLUGIN_GATE = [
+    ['plugin sonnet blocks drop table', 'model-router:executor-sonnet', MIG, { content: 'drop table public.perfis;' }, 2, T.sqlDrop],
+    ['plugin sonnet blocks a sensitive path', 'model-router:executor-sonnet', 'src/auth.ts', {}, 2, T.exactPath],
+    ['plugin sonnet passes create index', 'model-router:executor-sonnet', MIG, { content: 'create index i on public.perfis (nome);' }, 0],
+    ['plugin haiku blocks .tsx', 'model-router:executor-haiku', 'src/T.tsx', {}, 2, T.exactUi.replace('src/App.tsx', 'src/T.tsx')],
+    ['plugin haiku blocks a migration', 'model-router:executor-haiku', MIG, { content: 'create index i on t (a);' }, 2, T.sonnet],
+    ['plugin opus passes drop table', 'model-router:executor-opus', MIG, { content: 'drop table public.perfis;' }, 0],
+    ['plugin opus passes a sensitive path', 'model-router:executor-opus', 'src/auth.ts', {}, 0],
+  ];
+  for (const [name, agent, p, extra, code, part] of PLUGIN_GATE) {
+    r = same(agent, p, extra);
+    check(`[${lang}] ${name}, same message as without prefix`, r.status === code && (!part || r.err.includes(part)) && r.same, `status ${r.status}: ${r.err}`);
+  }
+  for (const agent of ['x:executor-haiku', 'other-plugin:executor-sonnet', 'model-router:model-router:executor-haiku', 'model-router-x:executor-haiku', ':executor-haiku', 'claude-' + 'model-router:executor-haiku', 'claude-model-router' + ':executor-sonnet'])
+    expect(`[${lang}] another prefix is not ours and passes (${agent})`, run('project-gate.js', [], withAgent(agent, 'src/T.tsx')), 0);
+  expect(`[${lang}] without agent_type passes .tsx`, run('project-gate.js', [], write('src/T.tsx')), 0);
   const gate = (name, child) => {
     const d = path.join(TMP, `${name}-${lang}`); fs.mkdirSync(d);
     fs.copyFileSync(path.join(HOOKS, 'project-gate.js'), path.join(d, 'project-gate.js'));
@@ -641,6 +663,106 @@ check('--project migration keeps pt-BR and removes the old hooks', r.status === 
 check('--project migration swaps the gate without duplicating it', st.hooks.PreToolUse.length === 2 && !JSON.stringify(st).includes('portao-projeto')
   && st.hooks.PreToolUse.filter((e) => JSON.stringify(e).includes('project-gate.js')).length === 1 && JSON.stringify(st).includes('lint.js'), JSON.stringify(st));
 check('--project migration replaces the old block', readText(path.join(P4, 'CLAUDE.md')).startsWith('# Projeto\n') && !readText(path.join(P4, 'CLAUDE.md')).includes('velho'), readText(path.join(P4, 'CLAUDE.md')));
+
+// ---------- install.js: plugin already installed ----------
+console.log('\n# install.js: plugin already installed');
+for (const [lang, want] of [['en', 'the plugin is already installed'], ['pt-BR', 'o plugin já está instalado']]) {
+  h = newHome('home-plugin-' + lang);
+  fs.mkdirSync(path.join(h, '.claude'));
+  const plugins = { 'model-router@leotrvs': true, 'other@x': true };
+  fs.writeFileSync(path.join(h, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: plugins }));
+  r = install(h, ['--lang', lang]);
+  check(`[${lang}] global install warns when the plugin is enabled, and still installs`, r.status === 0 && r.out.includes(want) && r.out.includes('model-router@leotrvs')
+    && installedLang(path.join(h, '.claude'), path.join(h, '.claude', 'CLAUDE.md'), lang), r.out);
+  check(`[${lang}] enabledPlugins is kept as it was`, JSON.stringify(readJson(path.join(h, '.claude', 'settings.json')).enabledPlugins) === JSON.stringify(plugins), '');
+}
+h = newHome('home-plugin-other');
+fs.mkdirSync(path.join(h, '.claude'));
+fs.writeFileSync(path.join(h, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'other@x': true, 'model-router-extra@y': true, 'claude-model-router@leotrvs': true } }));
+r = install(h, []);
+check('no warning for other plugins', r.status === 0 && !r.out.includes('already installed'), r.out);
+const P5 = path.join(TMP, 'repo-plugin'); fs.mkdirSync(path.join(P5, '.claude'), { recursive: true });
+fs.writeFileSync(path.join(P5, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'model-router@leotrvs': true } }));
+r = install(newHome('home-plugin-project'), ['--project', P5]);
+check('--project mode does not warn about the plugin', r.status === 0 && !r.out.includes('already installed'), r.out);
+
+// ---------- plugin ----------
+console.log('\n# plugin');
+const PLUGIN = path.join(R, 'plugin');
+const build = require(path.join(R, 'scripts', 'build-plugin.js'));
+const b1 = build.files(), b2 = build.files();
+check('build is deterministic (two builds, same bytes)', JSON.stringify(b1) === JSON.stringify(b2) && Object.keys(b1).length > 0, '');
+check('build writes only inside plugin/', path.resolve(build.OUT) === PLUGIN, build.OUT);
+const onDisk = {};
+const walkBytes = (x) => { for (const e of fs.readdirSync(x, { withFileTypes: true })) { const p = path.join(x, e.name); e.isDirectory() ? walkBytes(p) : (onDisk[path.relative(PLUGIN, p).split(path.sep).join('/')] = fs.readFileSync(p)); } };
+if (fs.existsSync(PLUGIN)) walkBytes(PLUGIN);
+const outOfSync = [...new Set([...Object.keys(b1), ...Object.keys(onDisk)])].sort().filter((f) => !onDisk[f] || !(f in b1) || !onDisk[f].equals(Buffer.from(b1[f])));
+check('plugin/ matches a fresh build (if not, run node scripts/build-plugin.js)', outOfSync.length === 0, outOfSync.join(', '));
+const pText = (f) => (onDisk[f] ? onDisk[f].toString('utf8') : '');
+const VERSION = fs.readFileSync(path.join(R, 'VERSION'), 'utf8').trim();
+let pj = null; try { pj = JSON.parse(pText('.claude-plugin/plugin.json')); } catch {}
+check('plugin.json is valid, with version from VERSION (semver)', pj && pj.name === 'model-router' && pj.version === VERSION && /^\d+\.\d+\.\d+$/.test(VERSION)
+  && pj.author?.name === 'leotrvs' && pj.license === 'MIT' && /github\.com\/leotrvs\/claude-model-router$/.test(pj.repository), JSON.stringify(pj));
+let mk = null; try { mk = readJson(path.join(R, '.claude-plugin', 'marketplace.json')); } catch {}
+const entry = mk?.plugins?.[0] || {};
+check('marketplace.json lists the plugin by the same name, from ./plugin, without version', mk && mk.name && mk.owner?.name && mk.plugins.length === 1
+  && entry.name === pj?.name && entry.source === './plugin' && !('version' in entry) && fs.existsSync(path.join(R, entry.source, '.claude-plugin', 'plugin.json')), JSON.stringify(mk));
+const pSkill = pText('skills/route/SKILL.md');
+check('plugin SKILL.md has no local-only part and is named route', pSkill.length > 1000 && !LOCAL_ONLY(pSkill) && /^name: route$/m.test(pSkill)
+  && /^description: .*\/model-router:route\b/m.test(pSkill) && !/^name: claude-model-router/m.test(pSkill), pSkill.slice(0, 400));
+const NOTE_RE = /^Installed as a plugin, the agents are named `model-router:executor-haiku`, `model-router:executor-sonnet` and `model-router:executor-opus`\. Use these full names as `subagent_type` when delegating\.$/m;
+check('plugin SKILL.md explains the prefixed agent names right below the title', new RegExp('^# Claude Model Router\\n\\n' + NOTE_RE.source.slice(1), 'm').test(pSkill), pSkill.slice(0, 700));
+const undone = pSkill.replace('name: route', 'name: claude-model-router').replace('/model-router:route', '/claude-model-router').replace(new RegExp('\\n' + NOTE_RE.source.slice(1, -1) + '\\n'), '');
+check('plugin SKILL.md is the --project skill plus only those three changes', undone === skP, '');
+check('plugin agents have no hooks in the frontmatter and match the --project agents', AGENT_FILES.every((f) => pText('agents/' + f) && !/^hooks:/m.test(pText('agents/' + f))
+  && pText('agents/' + f) === readText(path.join(P, '.claude', 'agents', f))), '');
+check('plugin agents keep their model and the skill reference', ['haiku', 'sonnet', 'opus'].every((m) => pText(`agents/executor-${m}.md`).includes(`model: ${m}`)
+  && pText(`agents/executor-${m}.md`).includes('via the claude-model-router skill')), '');
+let hj = null; try { hj = JSON.parse(pText('hooks/hooks.json')); } catch {}
+const hookEntries = hj && hj.hooks && typeof hj.hooks === 'object' ? Object.values(hj.hooks).flat() : [];
+const commands = hookEntries.flatMap((e) => (e.hooks || []).map((x) => x.command));
+const targets = commands.map((c) => /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/(hooks\/[\w.-]+\.js)"$/.exec(c || '')?.[1]);
+check('hooks.json parses and every command points to a file in plugin/hooks', commands.length >= 2 && targets.every((t) => t && onDisk[t]), commands.join(' | '));
+check('hooks.json gates Edit|Write|MultiEdit|NotebookEdit with project-gate.js', hj?.hooks?.PreToolUse?.length === 1 && hj.hooks.PreToolUse[0].matcher === 'Edit|Write|MultiEdit|NotebookEdit'
+  && hj.hooks.PreToolUse[0].hooks[0].command.endsWith('/hooks/project-gate.js"') && hj.hooks.PreToolUse[0].hooks[0].timeout === 10, JSON.stringify(hj));
+check('hooks.json loads the rule on SessionStart', hj?.hooks?.SessionStart?.[0]?.hooks?.[0]?.command?.endsWith('/hooks/session-rule.js"'), JSON.stringify(hj));
+check('plugin hooks are copies of hooks/ and the language is en', ['block-ui.js', 'block-sensitive.js', 'project-gate.js', 'session-rule.js'].every((f) =>
+  onDisk['hooks/' + f] && onDisk['hooks/' + f].equals(fs.readFileSync(path.join(HOOKS, f)))) && pText('hooks/model-router.lang') === 'en', '');
+const PH = path.join(PLUGIN, 'hooks');
+for (const [name, agent, p, extra, code, want] of [
+  ['sonnet blocks drop table', 'model-router:executor-sonnet', 'supabase/migrations/a.sql', { content: 'drop table public.perfis;' }, 2, 'Blocked (sensitive migration: removes an existing object): supabase/migrations/a.sql. Return STATUS: BLOCKED to escalate to executor-opus.'],
+  ['sonnet blocks a sensitive path', 'model-router:executor-sonnet', 'src/auth.ts', {}, 2, EN_PATH],
+  ['sonnet passes create index', 'model-router:executor-sonnet', 'supabase/migrations/c.sql', { content: 'create index i on public.perfis (nome);' }, 0, ''],
+  ['haiku blocks .tsx', 'model-router:executor-haiku', 'src/T.tsx', {}, 2, 'Blocked: executor-haiku does not change the UI (src/T.tsx). Return STATUS: BLOCKED to escalate to executor-sonnet.'],
+  ['opus passes drop table', 'model-router:executor-opus', 'supabase/migrations/a.sql', { content: 'drop table public.perfis;' }, 0, ''],
+  ['another prefix passes .tsx', 'x:executor-haiku', 'src/T.tsx', {}, 0, ''],
+  ['no agent_type passes drop table', undefined, 'supabase/migrations/a.sql', { content: 'drop table public.perfis;' }, 0, ''],
+]) {
+  r = hook('project-gate.js', [], { tool_name: 'Write', cwd: PROJ, agent_type: agent, tool_input: { file_path: p, content: '', ...extra } }, PH);
+  check(`plugin gate: ${name}`, r.status === code && r.err.trim() === want, `status ${r.status}: ${r.err}`);
+}
+const RULE = locale('en', 'rule.md').replace(/<!--[\s\S]*?-->/g, '').trim();
+r = hook('session-rule.js', [], '{}', PH);
+check('session-rule.js prints the rule without markers and exits 0', r.status === 0 && r.out.trim() === RULE && !r.out.includes('<!--') && r.out.includes('# Model economy') && r.err === '', r.out.slice(0, 200) + r.err);
+const SR = path.join(TMP, 'session-rule'); fs.mkdirSync(SR);
+fs.copyFileSync(path.join(HOOKS, 'session-rule.js'), path.join(SR, 'session-rule.js'));
+r = hook('session-rule.js', [], '{}', SR);
+check('session-rule.js without rule.txt prints nothing and exits 0', r.status === 0 && r.out === '' && r.err === '', r.out + r.err);
+fs.writeFileSync(path.join(SR, 'rule.txt'), '﻿<!-- claude-model-router:start -->\r\n# Rule\r\ntext\r\n<!-- claude-model-router:end -->\r\n');
+r = hook('session-rule.js', [], '', SR);
+check('session-rule.js strips markers, BOM and CRLF', r.status === 0 && r.out === '# Rule\ntext\n', JSON.stringify(r.out));
+fs.mkdirSync(path.join(SR, 'dir')); fs.copyFileSync(path.join(HOOKS, 'session-rule.js'), path.join(SR, 'dir', 'session-rule.js')); fs.mkdirSync(path.join(SR, 'dir', 'rule.txt'));
+r = hook('session-rule.js', [], '', path.join(SR, 'dir'));
+check('session-rule.js with an unreadable rule.txt prints nothing and exits 0', r.status === 0 && r.out === '' && r.err === '', r.out + r.err);
+
+// claude plugin validate, only if the CLI is on the PATH. Runs with a temporary home, so it reads nothing of the user's.
+const cli = (args) => spawnSync('claude', args, { encoding: 'utf8', cwd: R, env: { ...envFor(newHome('home-cli-' + total)), CLAUDE_CONFIG_DIR: path.join(TMP, 'cli-config-' + total) }, timeout: 120000 });
+if (cli(['--version']).error) console.log('AVISO  claude is not on the PATH: skipping claude plugin validate.');
+else for (const target of ['./plugin', '.']) {
+  const x = cli(['plugin', 'validate', target]);
+  const out = (x.stdout || '') + (x.stderr || '');
+  check(`claude plugin validate ${target}`, x.status === 0, (out.match(/❯ .*/g) || [out]).join(' | '));
+}
 
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(`\n${total - failures} OK, ${failures} FALHOU, ${total} casos.`);

@@ -1,0 +1,19 @@
+{
+  "name": "model-router",
+  "version": "1.2.0",
+  "description": "Routes work to the cheapest Claude model able to do it with the same quality: Haiku, Sonnet or Opus executors, with hooks that block the smaller ones from UI, sensitive migrations, security and payment paths.",
+  "author": {
+    "name": "leotrvs"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/leotrvs/claude-model-router",
+  "keywords": [
+    "model-routing",
+    "subagents",
+    "cost",
+    "haiku",
+    "sonnet",
+    "opus",
+    "hooks"
+  ]
+}

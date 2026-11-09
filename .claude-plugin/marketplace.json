@@ -1,0 +1,14 @@
+{
+  "name": "leotrvs",
+  "owner": {
+    "name": "leotrvs"
+  },
+  "description": "Claude Code plugins by leotrvs.",
+  "plugins": [
+    {
+      "name": "model-router",
+      "source": "./plugin",
+      "description": "Routes work to the cheapest Claude model able to do it with the same quality, with hooks that keep the smaller executors away from UI, sensitive migrations, security and payments."
+    }
+  ]
+}

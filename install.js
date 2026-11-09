@@ -8,6 +8,7 @@
 const fs = require('fs'), os = require('os'), path = require('path');
 const SRC = __dirname;
 const SKILL = 'claude-model-router';
+const PLUGIN = 'model-router'; // name of the plugin version of this skill
 const LANGS = ['en', 'pt-BR'];
 const LANG_FILE = 'model-router.lang';
 const AGENTS = ['haiku', 'sonnet', 'opus'].map((m) => `executor-${m}.md`);
@@ -43,6 +44,7 @@ const MESSAGES = {
     ruleMarkers: (f) => `${f} must start and end with the claude-model-router markers.`,
     localOnlyLeft: (f) => `${f} still has local-only content after cleanup for --project mode.`,
     invalidLangFile: (f) => `${f} has an unknown language and was ignored.`,
+    pluginInstalled: (f, id) => `${f} lists the ${id} plugin in "enabledPlugins": the plugin is already installed. Using both duplicates the skill and the agents; keep only one of them.`,
     oldSectionKept: (f, title) => `${f} already had a "# ${title}" section without markers. It was kept and the new block was added at the end; delete the old section if you want.`,
     modelKept: (f, m) => `${f} already has "model": "${m}". It was kept; the recommended default is sonnet.`,
     projectModelTeam: 'In --project mode, the "model" in .claude/settings.json applies to the whole team that opens the repository.',
@@ -89,6 +91,7 @@ const MESSAGES = {
     ruleMarkers: (f) => `${f} precisa começar e terminar com os marcadores claude-model-router.`,
     localOnlyLeft: (f) => `${f} ainda tem conteúdo local-only depois da limpeza para o modo --project.`,
     invalidLangFile: (f) => `${f} tem um idioma desconhecido e foi ignorado.`,
+    pluginInstalled: (f, id) => `${f} lista o plugin ${id} em "enabledPlugins": o plugin já está instalado. Usar os dois duplica a skill e os agentes; mantenha só um deles.`,
     oldSectionKept: (f, title) => `${f} já tinha uma seção "# ${title}" sem marcadores. Ela foi mantida e o bloco novo foi acrescentado no fim; apague a seção antiga se quiser.`,
     modelKept: (f, m) => `${f} já tem "model": "${m}". Foi mantido; o padrão recomendado é sonnet.`,
     projectModelTeam: 'No modo --project, o "model" do .claude/settings.json vale para todo o time que abrir o repositório.',
@@ -190,6 +193,11 @@ if (fs.existsSync(SP)) {
   if (settings.hooks !== undefined && !isObject(settings.hooks)) abort(M.hooksNotObject(SP));
   for (const ev of ['PreToolUse', 'SubagentStop'])
     if (settings.hooks?.[ev] !== undefined && !Array.isArray(settings.hooks[ev])) abort(M.eventNotList(SP, ev));
+}
+// The plugin version of this skill: only a warning, nothing is read or changed beyond settings.json.
+if (!P && settings.enabledPlugins && typeof settings.enabledPlugins === 'object') {
+  const id = Object.keys(settings.enabledPlugins).find((k) => k.startsWith(PLUGIN + '@'));
+  if (id) warnings.push(M.pluginInstalled(SP, id));
 }
 let claude = null;
 if (fs.existsSync(CM)) {
